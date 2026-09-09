@@ -46,9 +46,51 @@ exceptions are preserved, without reporting a second N+1 exception. Nested scans
 join the outer session and do not finish it. State is isolated per thread/fiber.
 
 For non-block use, call `Axinite.scan`, execute code, then `Axinite.finish`.
-`finish` returns report hashes (`queries`, `stack`, `client_id`, `fingerprint`) and
+`finish` returns report hashes (`queries`, `stack`, `client_id`, `fingerprint`, `duration_ms`) and
 clears state, even when paused. When using imperative scans, arrange cleanup in
 your own ensure; prefer block form for original-exception preservation.
+
+### Development requests and jobs
+
+Keep the gem in the development/test Gemfile group above. Configure it explicitly
+in `config/environments/development.rb` (not an unconditional initializer):
+
+```ruby
+require 'axinite'
+Axinite.rails_logger = true # raw SOQL and local paths; fake data only
+Axinite.raise = false
+```
+
+Wrap executed controller work in `app/controllers/application_controller.rb`:
+
+```ruby
+class ApplicationController < ActionController::Base
+  if Rails.env.development?
+    around_action do |_controller, action|
+      Axinite.scan { action.call }
+    end
+  end
+end
+```
+
+For ActiveJob, wrap execution in `app/jobs/application_job.rb`:
+
+```ruby
+class ApplicationJob < ActiveJob::Base
+  if Rails.env.development?
+    around_perform do |_job, perform|
+      Axinite.scan { perform.call }
+    end
+  end
+end
+```
+
+The environment guards keep production boot independent of the development-only
+gem. Loading/configuration alone never starts a scan. These block boundaries retain
+nested-session ownership and original exceptions. They cover work actually executed
+inside the block, not later streaming, lazy result materialization, or work in
+unrelated fibers/threads. Job workers must run in the development environment too.
+No Rails or Sidekiq runtime dependency or dedicated middleware is included.
 
 ### Explicit RSpec integration
 
@@ -113,6 +155,11 @@ session. `ignore_pauses = true` makes pauses ineffective. `start_raise` /
   mixed-currency lists retain their currency sequence. Mixed currency/plain-number
   lists are not normalized as currency lists. This is a query-shape heuristic, not a SOQL validator
   or semantic equivalence engine. Structurally different queries stay separate.
+* `duration_ms` sums monotonic elapsed milliseconds for instrumented logical query
+  execution in that exact full-stack/fingerprint/client group. Text reports label
+  this as `ms elapsed query time`. It is not Salesforce server time, API call count,
+  or total lazy pagination/materialization time. Failed and ignored events
+  contribute neither groups nor timing.
 * Counts are **logical ActiveForce executions, not Salesforce API requests**.
   Restforce HTTP-cache hits still count; the event has no public cache-hit marker.
   Retries and later pagination do not add events. Lazy construction and loaded

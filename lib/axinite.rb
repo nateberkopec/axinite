@@ -46,6 +46,7 @@ module Axinite
         finish if session.equal?(owned)
         result
       ensure
+        clear_query_timings(owned)
         Thread.current[:axinite_session] = nil if session.equal?(owned)
       end
     end
@@ -56,6 +57,7 @@ module Axinite
 
       # Release ownership before presentation/logging, including when they raise.
       Thread.current[:axinite_session] = nil
+      clear_query_timings(current)
       reports = current.groups.values.select { |group| group[:queries].size >= min_n_queries }
       notify(reports) unless reports.empty?
       reports
@@ -106,27 +108,37 @@ module Axinite
       Thread.current[:axinite_session]
     end
 
-    def record(payload, locations)
+    def clear_query_timings(owner)
+      timings = Thread.current[:axinite_query_timings]
+      return unless timings
+
+      timings.delete_if { |frame| frame[0].equal?(owner) }
+      Thread.current[:axinite_query_timings] = nil if timings.empty?
+    end
+
+    def record(payload, started, finished)
       return unless scan?
       return if payload[:exception] || payload[:exception_object]
       soql = payload[:soql]
       return unless soql.is_a?(String)
       return if Array(ignore_queries).any? { |pattern| pattern === soql }
 
+      locations = caller_locations
       stack = locations.map(&:to_s)
       return if stack.any? { |line| Array(allow_stack_paths).any? { |pattern| line.match?(pattern) } }
 
       full_stack = locations.map { |location| [location.path, location.lineno] }
       key = [full_stack, fingerprint(soql), payload[:client_id]]
-      group = session.groups[key] ||= { queries: [], stack: stack, client_id: payload[:client_id], fingerprint: key[1] }
+      group = session.groups[key] ||= { queries: [], stack: stack, client_id: payload[:client_id], fingerprint: key[1], duration_ms: 0.0 }
       group[:queries] << soql.dup
+      group[:duration_ms] += (finished - started) * 1000
     end
 
     def notify(reports)
       text = reports.map do |report|
         stack = report[:stack].dup
         stack = backtrace_cleaner.clean(stack) if backtrace_cleaner
-        "N+1 queries detected (#{report[:queries].size} logical executions):\n" \
+        "N+1 queries detected (#{report[:queries].size} logical executions, #{report[:duration_ms].round(3)} ms elapsed query time):\n" \
           "#{report[:queries].map { |query| "  #{query}" }.join("\n")}\n" \
           "Call stack:\n#{stack.join("\n")}\n"
       end.join("\n")
@@ -143,7 +155,38 @@ module Axinite
   self.allow_stack_paths = []
   self.ignore_queries = []
 
-  ActiveSupport::Notifications.subscribe('query.active_force') do |*args|
-    record(args.last, caller_locations) if scan?
+  # Public start/finish subscribers avoid AS7's thread-shared monotonic stack.
+  class QuerySubscriber
+    def start(_name, _id, payload)
+      timings = Thread.current[:axinite_query_timings]
+      active = Axinite.scan?
+      return unless active || timings
+
+      timings ||= Thread.current[:axinite_query_timings] = []
+      owner = Thread.current[:axinite_session]
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC) if active
+      timings << [owner, started, payload]
+    end
+
+    def finish(_name, _id, payload)
+      timings = Thread.current[:axinite_query_timings]
+      return unless timings
+
+      # ActiveForce#execute_query supplies a fresh payload for each logical event.
+      # Matching it also discards nested starts abandoned by a sibling's start error.
+      # Reusing one payload for nested external events is not supported.
+      index = timings.rindex { |frame| frame[2].equal?(payload) }
+      return unless index
+
+      frame = timings[index]
+      timings.slice!(index..-1)
+      Thread.current[:axinite_query_timings] = nil if timings.empty?
+      return unless frame[1] && Axinite.scan? && Thread.current[:axinite_session].equal?(frame[0])
+
+      Axinite.send(:record, payload, frame[1], Process.clock_gettime(Process::CLOCK_MONOTONIC))
+    end
   end
+  private_constant :QuerySubscriber
+
+  ActiveSupport::Notifications.subscribe('query.active_force', QuerySubscriber.new)
 end

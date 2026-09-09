@@ -1,6 +1,14 @@
 require 'spec_helper'
 
 RSpec.describe Axinite::Fingerprint do
+  it 'normalizes frozen Unicode literals without mutating input' do
+    soql = "SELECT Id FROM Contact WHERE Name = '雪だるま café'".freeze
+    original = soql.dup
+    expect(Axinite.fingerprint(soql)).to eq(Axinite.fingerprint("SELECT Id FROM Contact WHERE Name = '別の名前'"))
+    expect(soql).to eq(original)
+    expect(soql).to be_frozen
+  end
+
   def fingerprint(value)
     described_class.call(value)
   end
