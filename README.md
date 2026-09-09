@@ -223,6 +223,57 @@ when switching lanes. Synthetic examples are not genuine existing-application
 regression proof. Real-app validation and exact-head remote CI remain separate
 delivery gates; neither is claimed here.
 
+### Real Rails acceptance app
+
+The small [acceptance app](acceptance/config/application.rb) boots genuine Rails
+middleware, routes, controller callbacks, rendering and ActiveJob. It uses real
+ActiveForce models and Restforce serialization/parsing; WebMock intercepts only
+Salesforce HTTP and disables all network connections. All records, OAuth tokens
+and hosts are synthetic. Boot removes inherited `SALESFORCE_*` names without
+reading or displaying their values.
+
+```sh
+export ACTIVE_FORCE_PATH="$PWD/../upstream/active_force"
+export BUNDLE_GEMFILE=acceptance/Gemfile
+# Ruby 3.3.11: Rails/AS/AM 8.1.3.1, Restforce 8.0.1
+bundle install
+bundle exec rake acceptance
+# Actual Ruby 2.7.8 with Bundler 2.4.22: Rails/AS/AM 7.0.10, Restforce 5.3.1
+LEGACY=1 mise exec ruby@2.7.8 -- bundle _2.4.22_ update
+LEGACY=1 mise exec ruby@2.7.8 -- bundle _2.4.22_ exec rake acceptance
+# Re-resolve when returning to the modern lane (unset LEGACY).
+bundle update
+```
+
+The acceptance-only Gemfile adds railties, actionpack and activejob, not the Rails
+meta-gem, ActiveRecord, a database, assets or a server. It pins the two framework
+lanes and RSpec 3.13.x, with WebMock 3.26.x. JSON is constrained below 3 because
+Restforce 8.0.1's response middleware passes parser options as a positional hash;
+JSON 3 removed that calling convention. No runtime gem dependencies change.
+
+Coverage includes lazy/fixed `has_many`, `has_one` and `belongs_to`, explicit
+lookup/count/sum loops and bulk equivalents, actual raising and original errors,
+successive request/job isolation, composite batch bodies and JSON responses,
+`nextRecordsUrl` pagination, detector sensitivity and explicit suite/metadata
+RSpec opt-in in bounded Rails subprocesses. Assertions require real results,
+HTTP and notification counts, raw warning queries, callsites and elapsed timing.
+Only the two owned `*_spec.rb` entry points run; never run recursive spec discovery
+or lint over `acceptance/`, which may contain installed dependencies.
+
+Test/development environment files explicitly load/configure Axinite; callbacks
+are guarded for those environments. A production subprocess boots with the
+development/test gem groups excluded and verifies that Axinite is unavailable
+to Bundler and its detector is not loaded.
+Callbacks cover synchronous executed work, not streaming, later lazy
+materialization or unrelated fibers. The count/sum bulk examples combine the two
+per-owner totals into one aggregate. This is an automated real-Rails fixture with
+HTTP-stubbed synthetic data, **not existing-business-application regression proof**.
+
+Enabled acceptance CI uses the same immutable ActiveForce pin as integration,
+and remains blocked until that fork is fetchable. No skipped/fallback green run
+or full-CI success is claimed. Rails dependencies, generated logs, temporary files,
+lockfiles and this app are excluded from the gem package.
+
 ## Contributing
 
 Keep changes ActiveForce-specific and include fake-data regression tests. Run the

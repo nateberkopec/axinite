@@ -57,3 +57,35 @@ jobs:
           bundler: ${{ matrix.bundler }}
           bundler-cache: true
       - run: bundle exec rspec spec integration/active_force_spec.rb
+  acceptance:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ruby: '2.7.8'
+            bundler: '2.4.22'
+            legacy: '1'
+          - ruby: '3.3.11'
+            bundler: '2.6.9'
+            legacy: ''
+    env:
+      BUNDLE_GEMFILE: acceptance/Gemfile
+      ACTIVE_FORCE_PATH: ${{ github.workspace }}/active_force
+      LEGACY: ${{ matrix.legacy }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # Blocked until Beyond-Finance SSO permits genuine personal-fork publication.
+      # Keep enabled: a missing dependency must not look like green integration CI.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: nateberkopec/active_force
+          ref: fea7929a103004b5817ccded56d82adc9e57b9cb
+          path: active_force
+          persist-credentials: false
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler: ${{ matrix.bundler }}
+          bundler-cache: true
+      - run: bundle exec rake acceptance

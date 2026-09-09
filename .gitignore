@@ -8,3 +8,8 @@
 /integration/Gemfile.lock
 
 /integration/vendor/
+
+/acceptance/Gemfile.lock
+/acceptance/vendor/
+/acceptance/log/
+/acceptance/tmp/
