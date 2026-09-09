@@ -114,7 +114,7 @@ module Axinite
       return if Array(ignore_queries).any? { |pattern| pattern === soql }
 
       stack = locations.map(&:to_s)
-      return if stack.any? { |line| Array(allow_stack_paths).any? { |pattern| pattern === line } }
+      return if stack.any? { |line| Array(allow_stack_paths).any? { |pattern| line.match?(pattern) } }
 
       full_stack = locations.map { |location| [location.path, location.lineno] }
       key = [full_stack, fingerprint(soql), payload[:client_id]]

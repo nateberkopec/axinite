@@ -162,6 +162,30 @@ RSpec.describe Axinite do
     expect { Axinite.scan { repeated_queries } }.not_to raise_error
   end
 
+  ['spec/axinite_spec.rb', /spec\/axinite_spec\.rb/].each do |path|
+    it "ignores matching stack paths #{path.inspect}" do
+      Axinite.allow_stack_paths = [path]
+      Axinite.raise = true
+      expect(Axinite.scan { repeated_queries; :value }).to eq(:value)
+    end
+  end
+
+  ['not_a_matching_path', /not_a_matching_path/].each do |path|
+    it "reports nonmatching stack paths #{path.inspect}" do
+      Axinite.allow_stack_paths = [path]
+      Axinite.raise = true
+      expect { Axinite.scan { repeated_queries } }.to raise_error(Axinite::NPlusOneQueriesError)
+    end
+  end
+
+  it 'keeps String query ignores exact rather than substring matches' do
+    Axinite.ignore_queries = ['SELECT Id FROM Contact']
+    Axinite.raise = true
+    expect { Axinite.scan { repeated_queries } }.to raise_error(Axinite::NPlusOneQueriesError)
+    Axinite.ignore_queries = ["SELECT Id FROM Contact WHERE AccountId = 'fake'"]
+    expect { Axinite.scan { repeated_queries } }.not_to raise_error
+  end
+
   it 'cleans stacks only for display and supports custom logging' do
     output = StringIO.new
     Axinite.custom_logger = Logger.new(output)

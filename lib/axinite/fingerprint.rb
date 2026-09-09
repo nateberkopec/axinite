@@ -5,6 +5,9 @@ module Axinite
   module Fingerprint
     RELATIVE_DATE = /\A(?:YESTERDAY|TODAY|TOMORROW|(?:LAST|THIS|NEXT)_(?:WEEK|MONTH|QUARTER|YEAR|FISCAL_QUARTER|FISCAL_YEAR)|(?:LAST|NEXT)_90_DAYS|N_(?:DAYS|WEEKS|MONTHS|QUARTERS|YEARS|FISCAL_QUARTERS|FISCAL_YEARS)_AGO|(?:LAST|NEXT)_N_(?:DAYS|WEEKS|MONTHS|QUARTERS|YEARS|FISCAL_QUARTERS|FISCAL_YEARS))\z/i
 
+    CURRENCY_LITERAL = /[a-z]{3}[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?![\w.])/i
+    CURRENCY_IN_LIST = /in\s*\(\s*#{CURRENCY_LITERAL}(?:\s*,\s*#{CURRENCY_LITERAL})*\s*\)/i
+
     def self.call(soql)
       scanner = StringScanner.new(soql)
       tokens = []
@@ -15,6 +18,14 @@ module Axinite
           tokens << '?'
         elsif scanner.scan(/\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?(?![\w])/i)
           tokens << '?'
+        elsif (list = scanner.scan(CURRENCY_IN_LIST))
+          currencies = list.scan(CURRENCY_LITERAL).map { |value| "#{value[0, 3].downcase}?" }
+          values = currencies.uniq.size == 1 ? "#{currencies.first}+" : currencies.join(' , ')
+          tokens << "in ( #{values} )"
+        # Outside complete literal IN lists, only comparison RHS is a literal position.
+        # SELECT USD100 (including aliases) must remain an identifier.
+        elsif %w[= < >].include?(tokens.last) && (currency = scanner.scan(CURRENCY_LITERAL))
+          tokens << "#{currency[0, 3].downcase}?"
         elsif (name = scanner.scan(/[a-z_][a-z_0-9]*/i))
           if RELATIVE_DATE.match?(name)
             scanner.scan(/:\d+/)

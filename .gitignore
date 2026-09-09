@@ -4,3 +4,7 @@
 /coverage/
 /.env
 /vendor/
+
+/integration/Gemfile.lock
+
+/integration/vendor/
