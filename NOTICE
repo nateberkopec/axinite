@@ -1,0 +1,10 @@
+Axinite
+Copyright 2026 Nate Berkopec
+
+The lifecycle API, full-stack grouping approach and behavioral test scenarios
+are adapted from Prosopite, Copyright 2021 Mpampis Kostas
+(https://github.com/fatkodima/prosopite), under the Apache License 2.0.
+Source reference: e5130979e18e2c46e0e797e27e7f9e5f263dcac1.
+Modifications: ActiveForce-only notification handling, client-aware grouping,
+SOQL lexer, exception-safe fiber-local ownership, explicit RSpec integration,
+and independently written fake-data tests. No SQL adapter implementation is used.

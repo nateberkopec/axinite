@@ -1,0 +1,11 @@
+[tools]
+ruby = "3.3.11"
+
+[tasks.test]
+run = "bundle exec rake"
+
+[tasks.lint]
+run = "bundle exec rake lint"
+
+[tasks.build]
+run = "gem build axinite.gemspec"
