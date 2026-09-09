@@ -14,8 +14,12 @@ ActiveForce version is currently claimed to include that patch.
 
 Authorized collaborators can install Axinite from the private repository with
 `gem 'axinite', git: 'https://github.com/nateberkopec/axinite.git'`. GitHub access
-is required. The instrumented ActiveForce dependency is still blocked on upstream
-SSO authorization; no usable remote fork reference is claimed yet.
+is required. The instrumented dependency is available at
+[ActiveForce commit `fea7929`](https://github.com/nateberkopec/active_force/commit/fea7929a103004b5817ccded56d82adc9e57b9cb)
+in the [public independent copy](https://github.com/nateberkopec/active_force) of
+Beyond-Finance/active_force, with preserved MIT license and history. Its
+[instrumentation PR](https://github.com/nateberkopec/active_force/pull/1) targets
+that personal repository, not upstream.
 
 For local development, add your local checkouts to your application's Gemfile
 (paths are examples, not committed dependency settings):
@@ -212,16 +216,15 @@ bundle exec rspec spec integration/active_force_spec.rb
 ```
 
 CI also defines cross-repository integration jobs for Ruby 2.7 / AS-AM 7.0 /
-Restforce 5.3 and Ruby 3.3 / AS-AM 8.1 / Restforce 8. The candidate workflow pins
-ActiveForce commit `fea7929a103004b5817ccded56d82adc9e57b9cb` from the intended
-personal fork `nateberkopec/active_force`. That commit is local only and **not
-fetchable until Beyond-Finance SSO access permits genuine fork publication**; no remote green result is claimed.
+Restforce 5.3 and Ruby 3.3 / AS-AM 8.1 / Restforce 8. The workflow pins fetchable
+ActiveForce commit `fea7929a103004b5817ccded56d82adc9e57b9cb` from the public
+independent copy `nateberkopec/active_force` (not a GitHub fork-network member).
 
 Integration dependencies are test-only, not gem runtime dependencies. The
 integration lockfile is local and ignored; use separate checkouts or re-resolve
 when switching lanes. Synthetic examples are not genuine existing-application
-regression proof. Real-app validation and exact-head remote CI remain separate
-delivery gates; neither is claimed here.
+regression proof. Genuine existing-business-application validation remains a
+separate, incomplete delivery gate.
 
 ### Real Rails acceptance app
 
@@ -269,9 +272,12 @@ materialization or unrelated fibers. The count/sum bulk examples combine the two
 per-owner totals into one aggregate. This is an automated real-Rails fixture with
 HTTP-stubbed synthetic data, **not existing-business-application regression proof**.
 
-Enabled acceptance CI uses the same immutable ActiveForce pin as integration,
-and remains blocked until that fork is fetchable. No skipped/fallback green run
-or full-CI success is claimed. Rails dependencies, generated logs, temporary files,
+Enabled acceptance CI uses the same immutable ActiveForce pin as integration.
+[CI run 34313101624, attempt 2](https://github.com/nateberkopec/axinite/actions/runs/34313101624/attempts/2)
+passed all six jobs at Axinite commit `f0a18c0d4b96aca908afd08ce670abb48e59ad0a`:
+each Ruby lane ran 31 acceptance, 112 unit and 132 combined integration examples,
+with zero failures; lint and package checks passed. No examples were replaced by
+skipped/fallback jobs. Rails dependencies, generated logs, temporary files,
 lockfiles and this app are excluded from the gem package.
 
 ## Contributing
