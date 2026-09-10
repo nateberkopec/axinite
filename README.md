@@ -3,51 +3,6 @@
 Find N+1 queries in Ruby apps that use **ActiveForce**. Axinite spots repeated
 Salesforce queries so you can find loops that load records one at a time.
 
-Use it with fake data in local development and tests. It can raise an error,
-write a warning, or return a report. It does not need ActiveRecord, Prosopite,
-or `pg_query`.
-
-> [!WARNING]
-> Use fake data only. Reports include raw SOQL, query values, and local file paths.
-> Do not use Axinite in production, connect it to real Salesforce data, or share
-> reports that contain private data.
-
-## Installation
-
-Axinite is not yet released on RubyGems. It requires Ruby 2.7+ and ActiveSupport
-7 or 8. Your Ruby version must also support the ActiveSupport version you choose.
-
-> [!IMPORTANT]
-> Axinite needs ActiveForce to emit `query.active_force` events. An unpatched
-> version cannot be scanned. Use the pinned version below; no published
-> ActiveForce release is currently confirmed to include this patch.
-
-Add these entries to your application's `Gemfile`. If you already list
-ActiveForce, replace that entry rather than adding a second one.
-
-```ruby
-group :development, :test do
-  gem 'active_force',
-      git: 'https://github.com/nateberkopec/active_force.git',
-      ref: 'fea7929a103004b5817ccded56d82adc9e57b9cb'
-  gem 'axinite', git: 'https://github.com/nateberkopec/axinite.git'
-end
-```
-
-Then install the gems:
-
-```fish
-bundle install
-```
-
-The ActiveForce pin comes from a [public copy](https://github.com/nateberkopec/active_force)
-of Beyond-Finance/active_force. It keeps the original history and MIT license.
-The [instrumentation PR](https://github.com/nateberkopec/active_force/pull/1)
-targets that copy, not upstream.
-
-Keep your normal ActiveForce setup available in any other environments that need
-it. Keep Axinite itself in the development and test groups.
-
 ## Quickstart
 
 In a local test that already uses a fake ActiveForce client, wrap the code you
