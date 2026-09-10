@@ -1,71 +1,92 @@
 # Axinite
 
-Find N+1 queries made through **ActiveForce**, using fake data in local development
-and tests. Axinite reports repeated SOQL shapes from the same complete call stack
-and client, including identical repeated queries. It does not depend on
-ActiveRecord, Prosopite, or `pg_query`.
+Find N+1 queries in Ruby apps that use **ActiveForce**. Axinite spots repeated
+Salesforce queries so you can find loops that load records one at a time.
+
+Use it with fake data in local development and tests. It can raise an error,
+write a warning, or return a report. It does not need ActiveRecord, Prosopite,
+or `pg_query`.
+
+> [!WARNING]
+> Use fake data only. Reports include raw SOQL, query values, and local file paths.
+> Do not use Axinite in production, connect it to real Salesforce data, or share
+> reports that contain private data.
 
 ## Installation
 
-This unreleased gem requires Ruby 2.7+ and ActiveSupport 7 or 8. It also requires
-an ActiveForce version with the `query.active_force` instrumentation patch;
-unpatched ActiveForce emits no events and **cannot be scanned**. No published
-ActiveForce version is currently claimed to include that patch.
+Axinite is not yet released on RubyGems. It requires Ruby 2.7+ and ActiveSupport
+7 or 8. Your Ruby version must also support the ActiveSupport version you choose.
 
-Authorized collaborators can install Axinite from the private repository with
-`gem 'axinite', git: 'https://github.com/nateberkopec/axinite.git'`. GitHub access
-is required. The instrumented dependency is available at
-[ActiveForce commit `fea7929`](https://github.com/nateberkopec/active_force/commit/fea7929a103004b5817ccded56d82adc9e57b9cb)
-in the [public independent copy](https://github.com/nateberkopec/active_force) of
-Beyond-Finance/active_force, with preserved MIT license and history. Its
-[instrumentation PR](https://github.com/nateberkopec/active_force/pull/1) targets
-that personal repository, not upstream.
+> [!IMPORTANT]
+> Axinite needs ActiveForce to emit `query.active_force` events. An unpatched
+> version cannot be scanned. Use the pinned version below; no published
+> ActiveForce release is currently confirmed to include this patch.
 
-For local development, add your local checkouts to your application's Gemfile
-(paths are examples, not committed dependency settings):
+Add these entries to your application's `Gemfile`. If you already list
+ActiveForce, replace that entry rather than adding a second one.
 
 ```ruby
 group :development, :test do
-  gem 'active_force', path: '../active_force'
-  gem 'axinite', path: '../axinite'
+  gem 'active_force',
+      git: 'https://github.com/nateberkopec/active_force.git',
+      ref: 'fea7929a103004b5817ccded56d82adc9e57b9cb'
+  gem 'axinite', git: 'https://github.com/nateberkopec/axinite.git'
 end
 ```
 
-Then run `bundle install`. Use only authorized local fake-data environments.
+Then install the gems:
+
+```fish
+bundle install
+```
+
+The ActiveForce pin comes from a [public copy](https://github.com/nateberkopec/active_force)
+of Beyond-Finance/active_force. It keeps the original history and MIT license.
+The [instrumentation PR](https://github.com/nateberkopec/active_force/pull/1)
+targets that copy, not upstream.
+
+Keep your normal ActiveForce setup available in any other environments that need
+it. Keep Axinite itself in the development and test groups.
+
+## Quickstart
+
+In a local test that already uses a fake ActiveForce client, wrap the code you
+want to check:
+
+```ruby
+require 'axinite'
+
+Axinite.raise = true
+
+Axinite.scan do
+  # Run application code that queries through your fake ActiveForce client.
+end
+```
+
+By default, two queries with the same query shape, full call stack, and client
+trigger a report. Identical repeated queries count too. With `Axinite.raise`
+enabled, a match raises `Axinite::NPlusOneQueriesError`.
+
+Loading the gem does not start a scan. Log output and errors are off by default.
+
+The block form returns your code's result and clears the scan state when it ends.
+If your code raises an error, Axinite preserves that error instead of raising a
+second one. Nested scans share the outer scan. Each fiber has its own scan state.
 
 ## Usage
 
-```ruby
-require 'axinite'
-Axinite.raise = true # opt in to raw-query exceptions
+### Check Rails requests and jobs
 
-Axinite.scan do
-  # Run the code under test, using a fake ActiveForce client.
-end
-```
-
-Requiring Axinite does not start scanning. `scan { ... }` returns the block value,
-finishes its own session, and cleans up even when reporting fails. Original block
-exceptions are preserved, without reporting a second N+1 exception. Nested scans
-join the outer session and do not finish it. State is isolated per thread/fiber.
-
-For non-block use, call `Axinite.scan`, execute code, then `Axinite.finish`.
-`finish` returns report hashes (`queries`, `stack`, `client_id`, `fingerprint`, `duration_ms`) and
-clears state, even when paused. When using imperative scans, arrange cleanup in
-your own ensure; prefer block form for original-exception preservation.
-
-### Development requests and jobs
-
-Keep the gem in the development/test Gemfile group above. Configure it explicitly
-in `config/environments/development.rb` (not an unconditional initializer):
+In `config/environments/development.rb`, enable warnings:
 
 ```ruby
 require 'axinite'
-Axinite.rails_logger = true # raw SOQL and local paths; fake data only
+
+Axinite.rails_logger = true
 Axinite.raise = false
 ```
 
-Wrap executed controller work in `app/controllers/application_controller.rb`:
+Wrap controller actions in `app/controllers/application_controller.rb`:
 
 ```ruby
 class ApplicationController < ActionController::Base
@@ -77,7 +98,7 @@ class ApplicationController < ActionController::Base
 end
 ```
 
-For ActiveJob, wrap execution in `app/jobs/application_job.rb`:
+Wrap job execution in `app/jobs/application_job.rb`:
 
 ```ruby
 class ApplicationJob < ActiveJob::Base
@@ -89,205 +110,168 @@ class ApplicationJob < ActiveJob::Base
 end
 ```
 
-The environment guards keep production boot independent of the development-only
-gem. Loading/configuration alone never starts a scan. These block boundaries retain
-nested-session ownership and original exceptions. They cover work actually executed
-inside the block, not later streaming, lazy result materialization, or work in
-unrelated fibers/threads. Job workers must run in the development environment too.
-No Rails or Sidekiq runtime dependency or dedicated middleware is included.
+These guards keep production from loading Axinite. Job workers must also run in
+the development environment. Do not put this setup in an initializer that runs
+in every environment.
 
-### Explicit RSpec integration
+Scans cover only work that runs inside the block. They do not cover later
+streaming, deferred query results, or work in other threads or fibers. Axinite
+does not include Rails or Sidekiq middleware.
 
-Requiring the integration alone does nothing. Enable it once in `spec_helper.rb`
-**before defining any example groups**. Installation does not update groups that
-already exist; late installation is unsupported:
+### Check RSpec examples
+
+Add this to `spec_helper.rb` **before any example groups are defined**:
 
 ```ruby
 require 'axinite/rspec'
+
 Axinite.raise = true
+
 RSpec.configure do |config|
-  Axinite::RSpec.install!(config) # every example
-  # OR: Axinite::RSpec.install!(config, metadata: :axinite)
+  Axinite::RSpec.install!(config)
 end
 ```
 
-With the metadata option, use `it 'loads contacts', :axinite do ... end`.
-The optional integration supports **rspec-core 3.13.x** and rejects other versions
-at installation. It uses one private hook-registration interface because public
-`around` hooks run inside RSpec's built-in failure aggregation. Recheck this
-compatibility boundary before upgrading RSpec; Axinite itself does not depend on RSpec.
-
-Observed example failures, pending outcomes and runtime skips take precedence over
-N+1 reporting, including aggregated expectations and before/after hooks. The scan
-encloses ordinary user `around` hooks registered before or after installation.
-Errors outside or after Axinite's owned scan (for example, suite teardown or an
-externally wrapping integration) cannot be predicted or suppressed by Axinite.
-
-### Configuration
+To scan only tagged examples, use this install call instead:
 
 ```ruby
-Axinite.min_n_queries = 2 # default; also Axinite.threshold=
-Axinite.ignore_queries = [/FROM Audit__c/] # SOQL string or pattern matches
-Axinite.allow_stack_paths = [/spec\/support\/intentional_queries\.rb/]
-Axinite.custom_logger = Logger.new($stderr) # opt in; receives #warn
-Axinite.stderr_logger = true
-# Axinite.rails_logger = true              # only when Rails is available
-# Axinite.axinite_logger = 'log/axinite.log' # explicit writable file path
-# Axinite.backtrace_cleaner = Rails.backtrace_cleaner
-Axinite.enabled = false # global switch; enabled? / disabled?
+Axinite::RSpec.install!(config, metadata: :axinite)
 ```
 
-All output destinations and raising are off by default. Reports contain **raw
-SOQL**, including literals, and local paths. Opting into loggers, exceptions, or
-consuming `finish` reports is a deliberate raw-data choice. Do not use production
-credentials/data, upload sensitive reports, or run this in production.
-
-`pause { ... }` restores the previous pause state and preserves returns/exceptions.
-`pause` / `resume` also work within an existing scan. `resume` never creates a
-session. `ignore_pauses = true` makes pauses ineffective. `start_raise` /
-`stop_raise` control fiber-local raising; `raise = true` enables it globally.
-
-## Features and limitations
-
-* A group is the exact **full path/line stack sequence + SOQL fingerprint + client
-  identity**. Stack cleaning affects display only. No default stack ignores or
-  blanket batching exemptions are applied. Threshold is an integer of at least 2.
-* The lexer normalizes escaped strings, numeric/date/datetime/relative-date
-  literals and literal `IN` lists. Digits inside names and relationship subquery
-  structure are retained. Currency-prefixed numbers normalize on comparison RHS
-  and in complete currency-only `IN` lists. Same-currency lists collapse in size;
-  mixed-currency lists retain their currency sequence. Mixed currency/plain-number
-  lists are not normalized as currency lists. This is a query-shape heuristic, not a SOQL validator
-  or semantic equivalence engine. Structurally different queries stay separate.
-* `duration_ms` sums monotonic elapsed milliseconds for instrumented logical query
-  execution in that exact full-stack/fingerprint/client group. Text reports label
-  this as `ms elapsed query time`. It is not Salesforce server time, API call count,
-  or total lazy pagination/materialization time. Failed and ignored events
-  contribute neither groups nor timing.
-* Counts are **logical ActiveForce executions, not Salesforce API requests**.
-  Restforce HTTP-cache hits still count; the event has no public cache-hit marker.
-  Retries and later pagination do not add events. Lazy construction and loaded
-  memoized relations do not execute again. The detector never enumerates results.
-* ActiveForce result/count/sum queries are covered, including composite batching;
-  failed notifications are excluded. Direct Restforce, SOSL, writes, Bulk APIs,
-  and other adapters are out of scope. No automatic fixes are made.
-* The event payload is `soql` (String), `model` (SObject class), `client_id`
-  (nonsecret identity), and `transport` (`:query` or `:composite_batch`), plus
-  standard ActiveSupport exception fields on failure.
-* Full-stack matching is intentionally strict and can miss equivalent loops with
-  different caller paths. Long scans retain raw queries/stacks in memory: keep
-  scans bounded to examples or small operations. Configuration is process-wide;
-  do not mutate configuration concurrently. Sessions are fiber-local.
-
-## Development and testing
-
-```sh
-bundle install
-bundle exec rake
-bundle exec rake lint
-gem build axinite.gemspec
-```
-
-The unit suite uses synthetic notification payloads and fake strings only. It is
-not proof from an existing application. Local checks passed on actual Ruby 2.7.8
-with AS/AM 7.0 and Restforce 5.3, and Ruby 3.3.11 with AS/AM 8.1 and Restforce 8.
-These runtime receipts are distinct from remote CI. CI defines Ruby 2.7/ActiveSupport 7.0 and
-Ruby 3.3/ActiveSupport 8.1 lanes. The opt-in cross-repository suite exercises actual
-instrumented ActiveForce with fake clients, including association N+1 examples
-and their `includes` equivalents. Query execution uses fake clients, not HTTP.
-Loading ActiveForce still constructs its default Restforce client and can read
-`SALESFORCE_*` configuration; clear those variables before loading in an isolated
-fake-data run:
+Then tag an example with `it 'loads contacts', :axinite do ... end`.
+Run your application's specs as usual:
 
 ```fish
-# Remove inherited Salesforce configuration without displaying values.
-for name in (set --names --export | string match 'SALESFORCE_*')
-    set --erase $name
+bundle exec rspec
+```
+
+The integration supports **rspec-core 3.13.x** and rejects other versions.
+It uses a private RSpec hook, so check compatibility before upgrading RSpec.
+Axinite does not otherwise depend on RSpec.
+
+Existing failures, pending examples, and runtime skips take priority over N+1
+errors. This includes failures from grouped expectations and before/after hooks.
+The scan wraps normal user `around` hooks, but cannot handle errors outside its
+scope, such as suite teardown. Installing it does not change groups that already
+exist.
+
+### Read reports directly
+
+Prefer the block form for most uses. To read report hashes, start and finish a
+scan yourself:
+
+```ruby
+Axinite.scan
+begin
+  # Run application code with a fake ActiveForce client.
+ensure
+  reports = Axinite.finish
 end
-# Point to the local ActiveForce checkout containing query.active_force.
-set -lx ACTIVE_FORCE_PATH /path/to/active_force
-set -lx BUNDLE_GEMFILE integration/Gemfile
-bundle install
-bundle exec rspec spec integration/active_force_spec.rb
-# On Ruby 2.7, select the legacy AS/AM 7.0 + Restforce 5.3 lane:
-set -lx LEGACY 1
-bundle update
-bundle exec rspec spec integration/active_force_spec.rb
 ```
 
-CI also defines cross-repository integration jobs for Ruby 2.7 / AS-AM 7.0 /
-Restforce 5.3 and Ruby 3.3 / AS-AM 8.1 / Restforce 8. The workflow pins fetchable
-ActiveForce commit `fea7929a103004b5817ccded56d82adc9e57b9cb` from the public
-independent copy `nateberkopec/active_force` (not a GitHub fork-network member).
+`finish` returns one hash per matching group, with these keys:
 
-Integration dependencies are test-only, not gem runtime dependencies. The
-integration lockfile is local and ignored; use separate checkouts or re-resolve
-when switching lanes. Synthetic examples are not genuine existing-application
-regression proof. Genuine existing-business-application validation remains a
-separate, incomplete delivery gate.
+| Key | Contents |
+| --- | --- |
+| `queries` | Raw SOQL strings |
+| `stack` | Call stack |
+| `client_id` | Client identity |
+| `fingerprint` | Normalized query shape |
+| `duration_ms` | Total elapsed query time for the group |
 
-### Real Rails acceptance app
+`finish` clears the scan state, even if the scan is paused. Enabled loggers and
+errors still apply. Unlike the block form, an error from `finish` in an `ensure`
+can replace an error from your code.
 
-The small [acceptance app](acceptance/config/application.rb) boots genuine Rails
-middleware, routes, controller callbacks, rendering and ActiveJob. It uses real
-ActiveForce models and Restforce serialization/parsing; WebMock intercepts only
-Salesforce HTTP and disables all network connections. All records, OAuth tokens
-and hosts are synthetic. Boot removes inherited `SALESFORCE_*` names without
-reading or displaying their values.
+## Configuration
 
-```sh
-export ACTIVE_FORCE_PATH="$PWD/../upstream/active_force"
-export BUNDLE_GEMFILE=acceptance/Gemfile
-# Ruby 3.3.11: Rails/AS/AM 8.1.3.1, Restforce 8.0.1
-bundle install
-bundle exec rake acceptance
-# Actual Ruby 2.7.8 with Bundler 2.4.22: Rails/AS/AM 7.0.10, Restforce 5.3.1
-LEGACY=1 mise exec ruby@2.7.8 -- bundle _2.4.22_ update
-LEGACY=1 mise exec ruby@2.7.8 -- bundle _2.4.22_ exec rake acceptance
-# Re-resolve when returning to the modern lane (unset LEGACY).
-bundle update
+Set options before running scans. Configuration is process-wide; do not change
+it from concurrent threads or fibers.
+
+```ruby
+Axinite.min_n_queries = 2 # Default; must be an integer of at least 2
+Axinite.ignore_queries = [/FROM Audit__c/]
+Axinite.allow_stack_paths = [/spec\/support\/intentional_queries\.rb/]
+Axinite.stderr_logger = true
 ```
 
-The acceptance-only Gemfile adds railties, actionpack and activejob, not the Rails
-meta-gem, ActiveRecord, a database, assets or a server. It pins the two framework
-lanes and RSpec 3.13.x, with WebMock 3.26.x. JSON is constrained below 3 because
-Restforce 8.0.1's response middleware passes parser options as a positional hash;
-JSON 3 removed that calling convention. No runtime gem dependencies change.
+`ignore_queries` skips matching SOQL strings. `allow_stack_paths` skips queries
+whose call stack contains a matching path. Both lists are empty by default.
+`Axinite.threshold = 2` is an alias for `min_n_queries=`.
 
-Coverage includes lazy/fixed `has_many`, `has_one` and `belongs_to`, explicit
-lookup/count/sum loops and bulk equivalents, actual raising and original errors,
-successive request/job isolation, composite batch bodies and JSON responses,
-`nextRecordsUrl` pagination, detector sensitivity and explicit suite/metadata
-RSpec opt-in in bounded Rails subprocesses. Assertions require real results,
-HTTP and notification counts, raw warning queries, callsites and elapsed timing.
-Only the two owned `*_spec.rb` entry points run; never run recursive spec discovery
-or lint over `acceptance/`, which may contain installed dependencies.
+Choose other output options as needed:
 
-Test/development environment files explicitly load/configure Axinite; callbacks
-are guarded for those environments. A production subprocess boots with the
-development/test gem groups excluded and verifies that Axinite is unavailable
-to Bundler and its detector is not loaded.
-Callbacks cover synchronous executed work, not streaming, later lazy
-materialization or unrelated fibers. The count/sum bulk examples combine the two
-per-owner totals into one aggregate. This is an automated real-Rails fixture with
-HTTP-stubbed synthetic data, **not existing-business-application regression proof**.
+```ruby
+Axinite.custom_logger = Logger.new($stderr) # Receives #warn calls
+Axinite.rails_logger = true                # Requires Rails
+Axinite.axinite_logger = 'log/axinite.log'  # Requires a writable path
+Axinite.backtrace_cleaner = Rails.backtrace_cleaner # Requires Rails
+```
 
-Enabled acceptance CI uses the same immutable ActiveForce pin as integration.
-[CI run 34313101624, attempt 2](https://github.com/nateberkopec/axinite/actions/runs/34313101624/attempts/2)
-passed all six jobs at Axinite commit `f0a18c0d4b96aca908afd08ce670abb48e59ad0a`:
-each Ruby lane ran 31 acceptance, 112 unit and 132 combined integration examples,
-with zero failures; lint and package checks passed. No examples were replaced by
-skipped/fallback jobs. Rails dependencies, generated logs, temporary files,
-lockfiles and this app are excluded from the gem package.
+Stack cleaning changes the display, not query grouping.
+
+To skip part of a scan:
+
+```ruby
+Axinite.pause do
+  # Queries here do not count.
+end
+```
+
+The block restores the prior pause state and preserves return values and errors.
+You can also call `Axinite.pause` and `Axinite.resume` within a scan. `resume`
+does not start a new scan. Set `Axinite.ignore_pauses = true` to count paused work.
+
+Other controls:
+
+- `Axinite.enabled = false` disables scanning. Check it with `enabled?` or `disabled?`.
+- `Axinite.raise = true` enables N+1 errors globally.
+- `Axinite.start_raise` and `Axinite.stop_raise` control the fiber-local error flag.
+  `stop_raise` does not override the global flag.
+
+## How detection works
+
+Axinite groups queries by three exact matches:
+
+1. Full call stack, including file paths and line numbers.
+2. SOQL fingerprint, which describes the query's shape.
+3. ActiveForce client identity.
+
+The fingerprint normalizes literal values, such as strings, numbers, dates,
+and literal `IN` lists. It keeps digits in field names and the structure of
+relationship subqueries. Currency values are normalized in comparisons and
+currency-only lists. Lists with one currency collapse to one shape; lists with
+mixed currencies keep their currency order. Mixed currency/plain-number lists
+do not use these currency rules.
+
+This is a pattern check, not a SOQL validator. Queries with different structures
+stay separate. Exact stack matching can miss similar loops reached through
+different caller paths. There are no default stack exclusions or blanket
+exceptions for batched queries.
+
+### Scope and limits
+
+- **Counts are ActiveForce executions, not Salesforce API requests.** Restforce
+  HTTP-cache hits still count. Retries and later pages do not add events.
+- Result, count, and sum queries are covered, including composite batches.
+  Failed queries and ignored events do not count or add elapsed time.
+- Direct Restforce calls, SOSL, writes, Bulk APIs, and other adapters are not covered.
+- Creating a lazy query does not execute it. Reading an already loaded, memoized
+  relation does not execute it again. Axinite never loads results itself.
+- `duration_ms` measures elapsed time for the recorded query executions. It is
+  not Salesforce server time or the total time to load later pages and results.
+- Scans keep raw queries and stacks in memory. Keep them short: use one example,
+  request, job, or small operation per scan.
+- Axinite reports possible N+1 queries. It does not fix them.
 
 ## Contributing
 
-Keep changes ActiveForce-specific and include fake-data regression tests. Run the
-tests and syntax checks before submitting a change. Do not include credentials,
-real Salesforce records, or raw private query reports.
+Keep changes focused on ActiveForce and add regression tests with fake data.
+Run tests and syntax checks before submitting a pull request. Do not include
+credentials, real Salesforce records, or private query reports.
 
 ## License
 
-[Apache-2.0](LICENSE.txt). Prosopite's lifecycle API and grouping approach informed
-this implementation and its behavioral tests; see [NOTICE](NOTICE) for attribution
-and modifications. The separate ActiveForce instrumentation patch remains MIT.
+[Apache-2.0](LICENSE.txt). Prosopite inspired the scan lifecycle, query grouping,
+and related tests. See [NOTICE](NOTICE) for attribution and changes.
+The separate ActiveForce instrumentation patch remains MIT-licensed.
