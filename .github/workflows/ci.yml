@@ -5,69 +5,39 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        include:
-          - ruby: '2.7.8'
-            active_support: '~> 7.0.0'
-            bundler: '2.4.22'
-          - ruby: '3.3.11'
-            active_support: '~> 8.1.0'
-            bundler: '2.6.9'
     env:
-      ACTIVE_SUPPORT_VERSION: ${{ matrix.active_support }}
+      ACTIVE_SUPPORT_VERSION: '~> 8.1.0'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler: ${{ matrix.bundler }}
+          ruby-version: '3.3.11'
+          bundler: '2.6.9'
           bundler-cache: true
       - run: bundle exec rake
       - run: bundle exec rake lint
       - run: gem build axinite.gemspec
   integration:
     runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        include:
-          - ruby: '2.7.8'
-            bundler: '2.4.22'
-            legacy: '1'
-          - ruby: '3.3.11'
-            bundler: '2.6.9'
-            legacy: ''
     env:
       BUNDLE_GEMFILE: integration/Gemfile
-      LEGACY: ${{ matrix.legacy }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler: ${{ matrix.bundler }}
+          ruby-version: '3.3.11'
+          bundler: '2.6.9'
           bundler-cache: true
       - run: bundle exec rspec spec integration/active_force_spec.rb
   acceptance:
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - ruby: '2.7.8'
-            bundler: '2.4.22'
-            legacy: '1'
-          - ruby: '3.3.11'
-            bundler: '2.6.9'
-            legacy: ''
     env:
       BUNDLE_GEMFILE: acceptance/Gemfile
-      LEGACY: ${{ matrix.legacy }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler: ${{ matrix.bundler }}
+          ruby-version: '3.3.11'
+          bundler: '2.6.9'
           bundler-cache: true
       - run: bundle exec rake acceptance
