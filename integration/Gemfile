@@ -1,6 +1,5 @@
 source 'https://rubygems.org'
 gemspec path: '..'
-gem 'active_force', path: ENV.fetch('ACTIVE_FORCE_PATH')
 gem 'rspec', '~> 3.13.0'
 gem 'rake', '~> 13.0'
 if ENV['LEGACY'] == '1'

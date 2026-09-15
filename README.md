@@ -14,22 +14,19 @@ or `pg_query`.
 
 ## Installation
 
-Axinite is not yet released on RubyGems. It requires Ruby 2.7+ and ActiveSupport
-7 or 8. Your Ruby version must also support the ActiveSupport version you choose.
+Axinite is not yet released on RubyGems. It requires Ruby 2.7+, ActiveForce
+0.27.0 or newer, and ActiveSupport 7 or 8. Your Ruby version must also support
+the ActiveSupport version you choose.
 
-> [!IMPORTANT]
-> Axinite needs ActiveForce to emit `query.active_force` events. An unpatched
-> version cannot be scanned. Use the pinned version below; no published
-> ActiveForce release is currently confirmed to include this patch.
+ActiveForce 0.27.0 includes the `query.active_force` events Axinite needs.
 
 Add these entries to your application's `Gemfile`. If you already list
 ActiveForce, replace that entry rather than adding a second one.
 
 ```ruby
+gem 'active_force', '>= 0.27.0'
+
 group :development, :test do
-  gem 'active_force',
-      git: 'https://github.com/nateberkopec/active_force.git',
-      ref: 'fea7929a103004b5817ccded56d82adc9e57b9cb'
   gem 'axinite', git: 'https://github.com/nateberkopec/axinite.git'
 end
 ```
@@ -39,14 +36,6 @@ Then install the gems:
 ```fish
 bundle install
 ```
-
-The ActiveForce pin comes from a [public copy](https://github.com/nateberkopec/active_force)
-of Beyond-Finance/active_force. It keeps the original history and MIT license.
-The [instrumentation PR](https://github.com/nateberkopec/active_force/pull/1)
-targets that copy, not upstream.
-
-Keep your normal ActiveForce setup available in any other environments that need
-it. Keep Axinite itself in the development and test groups.
 
 ## Quickstart
 
@@ -270,8 +259,27 @@ Keep changes focused on ActiveForce and add regression tests with fake data.
 Run tests and syntax checks before submitting a pull request. Do not include
 credentials, real Salesforce records, or private query reports.
 
+### Overhead benchmark
+
+Run the synthetic benchmark with:
+
+```fish
+bundle exec rake benchmark
+# Use more batches for a longer measurement:
+env BATCHES=1000 bundle exec rake benchmark
+```
+
+It reports elapsed time and allocated objects per query for disabled detection,
+enabled detection outside a scan, and scans with distinct or repeated queries.
+Each batch contains 100 fake query notifications. Scan measurements include
+finishing and report formatting, with logging and raising disabled. No Salesforce
+connection is used. These measurements describe local detector overhead, not
+Salesforce latency; compare runs on the same Ruby version and machine.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 ## License
 
 [Apache-2.0](LICENSE.txt). Prosopite inspired the scan lifecycle, query grouping,
 and related tests. See [NOTICE](NOTICE) for attribution and changes.
-The separate ActiveForce instrumentation patch remains MIT-licensed.
+ActiveForce is MIT-licensed.

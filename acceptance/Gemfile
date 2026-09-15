@@ -2,7 +2,7 @@ source 'https://rubygems.org'
 group :development, :test do
   gem 'axinite', path: '..'
 end
-gem 'active_force', path: ENV.fetch('ACTIVE_FORCE_PATH')
+gem 'active_force', '>= 0.27.0'
 gem 'rspec', '~> 3.13.0'
 gem 'rake', '~> 13.0'
 gem 'webmock', '~> 3.26.0'

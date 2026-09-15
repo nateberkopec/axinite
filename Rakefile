@@ -7,9 +7,14 @@ RSpec::Core::RakeTask.new(:acceptance) do |task|
   task.pattern = ['acceptance/rails_spec.rb', 'acceptance/rspec_spec.rb']
 end
 
+desc 'Measure synthetic notification and scan overhead'
+task :benchmark do
+  ruby '-Ilib', 'benchmark/overhead.rb'
+end
+
 desc 'Check Ruby syntax and patch whitespace'
 task :lint do
-  (Dir['lib/**/*.rb', 'spec/**/*.rb', 'integration/*_spec.rb', 'acceptance/*_spec.rb',
+  (Dir['lib/**/*.rb', 'spec/**/*.rb', 'benchmark/**/*.rb', 'integration/*_spec.rb', 'acceptance/*_spec.rb',
        'acceptance/support.rb', 'acceptance/rspec_fixture.rb',
        'acceptance/app/**/*.rb', 'acceptance/config/**/*.rb', '*.gemspec'] +
     ['Rakefile', 'integration/Gemfile', 'acceptance/Gemfile']).each do |file|

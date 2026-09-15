@@ -39,18 +39,9 @@ jobs:
             legacy: ''
     env:
       BUNDLE_GEMFILE: integration/Gemfile
-      ACTIVE_FORCE_PATH: ${{ github.workspace }}/active_force
       LEGACY: ${{ matrix.legacy }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      # Blocked until Beyond-Finance SSO permits genuine personal-fork publication.
-      # Keep enabled: a missing dependency must not look like green integration CI.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: nateberkopec/active_force
-          ref: fea7929a103004b5817ccded56d82adc9e57b9cb
-          path: active_force
-          persist-credentials: false
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: ${{ matrix.ruby }}
@@ -71,18 +62,9 @@ jobs:
             legacy: ''
     env:
       BUNDLE_GEMFILE: acceptance/Gemfile
-      ACTIVE_FORCE_PATH: ${{ github.workspace }}/active_force
       LEGACY: ${{ matrix.legacy }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      # Blocked until Beyond-Finance SSO permits genuine personal-fork publication.
-      # Keep enabled: a missing dependency must not look like green integration CI.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: nateberkopec/active_force
-          ref: fea7929a103004b5817ccded56d82adc9e57b9cb
-          path: active_force
-          persist-credentials: false
       - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: ${{ matrix.ruby }}
