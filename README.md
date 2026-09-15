@@ -3,40 +3,6 @@
 Find N+1 queries in Ruby apps that use **ActiveForce**. Axinite spots repeated
 Salesforce queries so you can find loops that load records one at a time.
 
-Use it with fake data in local development and tests. It can raise an error,
-write a warning, or return a report. It does not need ActiveRecord, Prosopite,
-or `pg_query`.
-
-> [!WARNING]
-> Use fake data only. Reports include raw SOQL, query values, and local file paths.
-> Do not use Axinite in production, connect it to real Salesforce data, or share
-> reports that contain private data.
-
-## Installation
-
-Axinite is not yet released on RubyGems. It requires Ruby 2.7+, ActiveForce
-0.27.0 or newer, and ActiveSupport 7 or 8. Your Ruby version must also support
-the ActiveSupport version you choose.
-
-ActiveForce 0.27.0 includes the `query.active_force` events Axinite needs.
-
-Add these entries to your application's `Gemfile`. If you already list
-ActiveForce, replace that entry rather than adding a second one.
-
-```ruby
-gem 'active_force', '>= 0.27.0'
-
-group :development, :test do
-  gem 'axinite', git: 'https://github.com/nateberkopec/axinite.git'
-end
-```
-
-Then install the gems:
-
-```fish
-bundle install
-```
-
 ## Quickstart
 
 In a local test that already uses a fake ActiveForce client, wrap the code you
